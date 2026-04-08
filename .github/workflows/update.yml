@@ -1,0 +1,152 @@
+name: Update GeoData
+
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+
+env:
+  GEOIP_REPO: "Loyalsoldier/geoip"
+  GEOSITE_REPO: "Loyalsoldier/v2ray-rules-dat"
+  RELEASE_BRANCH: "release"
+
+permissions:
+  contents: write
+
+jobs:
+  sync-geodata:
+    runs-on: ubuntu-latest
+    steps:
+      # ──────────────────────────────────────────────
+      #  1. Checkout 仓库
+      # ──────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@main
+        with:
+          ref: ${{ env.RELEASE_BRANCH }}
+          fetch-depth: 1
+
+      # ──────────────────────────────────────────────
+      #  2. 下载 geoip.dat 及其 sha256sum
+      # ──────────────────────────────────────────────
+      - name: Download geoip.dat from upstream
+        run: |
+          echo "::group::Fetching latest release info from $GEOIP_REPO"
+          GEOIP_TAG=$(curl -fsSL "https://api.github.com/repos/${GEOIP_REPO}/releases/latest" | jq -r '.tag_name')
+          echo "Upstream geoip tag: ${GEOIP_TAG}"
+          echo "::endgroup::"
+
+          echo "::group::Downloading geoip.dat"
+          curl -fsSL -o geoip.dat \
+            "https://github.com/${GEOIP_REPO}/releases/download/${GEOIP_TAG}/geoip.dat"
+          echo "::endgroup::"
+
+          echo "::group::Downloading geoip.dat.sha256sum"
+          curl -fsSL -o geoip.dat.sha256sum \
+            "https://github.com/${GEOIP_REPO}/releases/download/${GEOIP_TAG}/geoip.dat.sha256sum"
+          echo "::endgroup::"
+
+          echo "GEOIP_TAG=${GEOIP_TAG}" >> "$GITHUB_ENV"
+
+      # ──────────────────────────────────────────────
+      #  3. 下载 geosite.dat 及其 sha256sum
+      # ──────────────────────────────────────────────
+      - name: Download geosite.dat from upstream
+        run: |
+          echo "::group::Fetching latest release info from $GEOSITE_REPO"
+          GEOSITE_TAG=$(curl -fsSL "https://api.github.com/repos/${GEOSITE_REPO}/releases/latest" | jq -r '.tag_name')
+          echo "Upstream geosite tag: ${GEOSITE_TAG}"
+          echo "::endgroup::"
+
+          echo "::group::Downloading geosite.dat"
+          curl -fsSL -o geosite.dat \
+            "https://github.com/${GEOSITE_REPO}/releases/download/${GEOSITE_TAG}/geosite.dat"
+          echo "::endgroup::"
+
+          echo "::group::Downloading geosite.dat.sha256sum"
+          curl -fsSL -o geosite.dat.sha256sum \
+            "https://github.com/${GEOSITE_REPO}/releases/download/${GEOSITE_TAG}/geosite.dat.sha256sum"
+          echo "::endgroup::"
+
+          echo "GEOSITE_TAG=${GEOSITE_TAG}" >> "$GITHUB_ENV"
+
+      # ──────────────────────────────────────────────
+      #  4. 校验 SHA256 哈希
+      # ──────────────────────────────────────────────
+      - name: Verify SHA256 checksums
+        run: |
+          echo "=== Verifying geoip.dat ==="
+          # sha256sum 文件格式: <hash>  <filename>
+          EXPECTED_GEOIP=$(awk '{print $1}' geoip.dat.sha256sum)
+          ACTUAL_GEOIP=$(sha256sum geoip.dat | awk '{print $1}')
+          echo "  Expected: ${EXPECTED_GEOIP}"
+          echo "  Actual:   ${ACTUAL_GEOIP}"
+
+          if [ "${EXPECTED_GEOIP}" != "${ACTUAL_GEOIP}" ]; then
+            echo "::error::geoip.dat SHA256 mismatch! Aborting."
+            exit 1
+          fi
+          echo "  ✅ geoip.dat checksum OK"
+
+          echo ""
+          echo "=== Verifying geosite.dat ==="
+          EXPECTED_GEOSITE=$(awk '{print $1}' geosite.dat.sha256sum)
+          ACTUAL_GEOSITE=$(sha256sum geosite.dat | awk '{print $1}')
+          echo "  Expected: ${EXPECTED_GEOSITE}"
+          echo "  Actual:   ${ACTUAL_GEOSITE}"
+
+          if [ "${EXPECTED_GEOSITE}" != "${ACTUAL_GEOSITE}" ]; then
+            echo "::error::geosite.dat SHA256 mismatch! Aborting."
+            exit 1
+          fi
+          echo "  ✅ geosite.dat checksum OK"
+
+      # ──────────────────────────────────────────────
+      #  5. 生成 Tag（年月日时分 格式）
+      # ──────────────────────────────────────────────
+      - name: Generate release tag
+        run: |
+          TAG=$(date -u +'%Y%m%d%H%M')
+          echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "Release tag: ${TAG}"
+
+      # ──────────────────────────────────────────────
+      #  6. 发布到 Release
+      # ──────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          body: |
+            ## GeoData Update — ${{ env.RELEASE_TAG }}
+
+            | 文件 | 上游仓库 | 上游 Tag |
+            |------|---------|---------|
+            | `geoip.dat` | [${{ env.GEOIP_REPO }}](https://github.com/${{ env.GEOIP_REPO }}) | `${{ env.GEOIP_TAG }}` |
+            | `geosite.dat` | [${{ env.GEOSITE_REPO }}](https://github.com/${{ env.GEOSITE_REPO }}) | `${{ env.GEOSITE_TAG }}` |
+          files: |
+            geoip.dat
+            geosite.dat
+            geoip.dat.sha256sum
+            geosite.dat.sha256sum
+
+      # ──────────────────────────────────────────────
+      #  7. 推送到 release 分支
+      # ──────────────────────────────────────────────
+      - name: Push files to release branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 仅保留需要的文件
+          git add geoip.dat geosite.dat geoip.dat.sha256sum geosite.dat.sha256sum
+
+          # 检查是否有变更
+          if git diff --cached --quiet; then
+            echo "No changes detected on release branch, skipping commit."
+          else
+            git commit -m "Update geodata: ${RELEASE_TAG}"
+            git push origin HEAD:${RELEASE_BRANCH}
+            echo "✅ Pushed to ${RELEASE_BRANCH} branch."
+          fi
