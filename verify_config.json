@@ -1,0 +1,72 @@
+{
+  "log": {
+    "access": "none",
+    "dnsLog": false,
+    "error": "",
+    "loglevel": "warning",
+    "maskAddress": ""
+  },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "port": 12335,
+      "protocol": "tunnel",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "sniffing": null,
+      "streamSettings": null,
+      "tag": "test"
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4v6",
+        "redirect": "",
+        "noises": []
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "domain": [
+          "geosite:category-games@cn",
+          "geosite:category-games",
+          "geosite:category-ai-!cn",
+          "geosite:apple-intelligence",
+          "geosite:icloudprivaterelay",
+          "geosite:bing",
+          "geosite:netflix",
+          "geosite:disney",
+          "geosite:primevideo",
+          "geosite:hbo",
+          "geosite:hulu",
+          "geosite:dazn",
+          "geosite:hotstar",
+          "geosite:tvb",
+          "geosite:viu",
+          "geosite:spotify",
+          "geosite:tiktok",
+          "geosite:apple",
+          "geosite:geolocation-!cn",
+          "geosite:cn"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "geoip:cn",
+          "geoip:private"
+        ],
+        "outboundTag": "direct"
+      }
+    ]
+  }
+}
