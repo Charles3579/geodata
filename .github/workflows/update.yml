@@ -132,15 +132,14 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Running Xray verification"
-          # 启动 Xray，限时 15 秒；正常启动后会持续运行，超时即代表成功
-          timeout 15 xray_verify/xray run -c xray_verify/verify_config.json > xray_verify/xray_output.log 2>&1
+          # 使用 -test 参数验证配置，Xray 会校验后立即退出
+          xray_verify/xray run -test -c xray_verify/verify_config.json > xray_verify/xray_output.log 2>&1
           EXIT_CODE=$?
           cat xray_verify/xray_output.log
           echo "::endgroup::"
 
-          # timeout 退出码 124 表示超时（即 Xray 成功启动并持续运行）
-          # 同时检查输出中是否包含 "started" 关键字
-          if [ $EXIT_CODE -eq 124 ] && grep -qi "started" xray_verify/xray_output.log; then
+          # 检查退出码及输出中是否包含 "Configuration OK."
+          if [ $EXIT_CODE -eq 0 ] && grep -q "Configuration OK." xray_verify/xray_output.log; then
             echo "✅ Xray verification passed — geodata files are valid."
             echo "VERIFY_RESULT=success" >> "$GITHUB_ENV"
           else
