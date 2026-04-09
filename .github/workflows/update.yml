@@ -102,7 +102,64 @@ jobs:
           echo "  ✅ geosite.dat checksum OK"
 
       # ──────────────────────────────────────────────
-      #  5. 生成 Tag（年月日时分 格式）
+      #  5. 使用 Xray 校验 geosite/geoip 资源有效性
+      # ──────────────────────────────────────────────
+      - name: Verify geodata with Xray
+        id: xray_verify
+        run: |
+          set +e
+
+          echo "::group::Downloading Xray-core"
+          curl -fsSL -o xray.zip \
+            "https://github.com/xtls/Xray-core/releases/latest/download/Xray-linux-64.zip"
+          echo "::endgroup::"
+
+          echo "::group::Extracting Xray-core"
+          mkdir -p xray_verify
+          unzip -o xray.zip -d xray_verify
+          chmod +x xray_verify/xray
+          echo "::endgroup::"
+
+          echo "::group::Replacing bundled geo files with upstream ones"
+          rm -f xray_verify/geosite.dat xray_verify/geoip.dat
+          cp geosite.dat xray_verify/geosite.dat
+          cp geoip.dat xray_verify/geoip.dat
+          echo "::endgroup::"
+
+          echo "::group::Fetching verify_config.json from main branch"
+          curl -fsSL -o xray_verify/verify_config.json \
+            "https://raw.githubusercontent.com/${{ github.repository }}/main/verify_config.json"
+          echo "::endgroup::"
+
+          echo "::group::Running Xray verification"
+          # 启动 Xray，限时 15 秒；正常启动后会持续运行，超时即代表成功
+          timeout 15 xray_verify/xray run -c xray_verify/verify_config.json > xray_verify/xray_output.log 2>&1
+          EXIT_CODE=$?
+          cat xray_verify/xray_output.log
+          echo "::endgroup::"
+
+          # timeout 退出码 124 表示超时（即 Xray 成功启动并持续运行）
+          # 同时检查输出中是否包含 "started" 关键字
+          if [ $EXIT_CODE -eq 124 ] && grep -qi "started" xray_verify/xray_output.log; then
+            echo "✅ Xray verification passed — geodata files are valid."
+            echo "VERIFY_RESULT=success" >> "$GITHUB_ENV"
+          else
+            echo "::error::❌ Xray verification FAILED (exit code: $EXIT_CODE)"
+            echo "VERIFY_RESULT=failure" >> "$GITHUB_ENV"
+          fi
+
+          # 清理
+          rm -rf xray_verify xray.zip
+
+
+      - name: Abort if verification failed
+        if: env.VERIFY_RESULT == 'failure'
+        run: |
+          echo "::error::Geodata verification failed, aborting release."
+          exit 1
+
+      # ──────────────────────────────────────────────
+      #  6. 生成 Tag（年月日时分 格式）
       # ──────────────────────────────────────────────
       - name: Generate release tag
         run: |
@@ -111,7 +168,7 @@ jobs:
           echo "Release tag: ${TAG}"
 
       # ──────────────────────────────────────────────
-      #  6. 发布到 Release
+      #  7. 发布到 Release
       # ──────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -132,7 +189,7 @@ jobs:
             geosite.dat.sha256sum
 
       # ──────────────────────────────────────────────
-      #  7. 推送到 release 分支
+      #  8. 推送到 release 分支
       # ──────────────────────────────────────────────
       - name: Push files to release branch
         run: |
