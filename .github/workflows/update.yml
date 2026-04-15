@@ -166,35 +166,43 @@ jobs:
             geoip.dat.sha256sum
             geosite.dat.sha256sum
 
+      - name: Delete old releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 通过 gh release 获取历史版本，保留最新 10 份，删除剩余的 release 及 tag
+          tags_to_delete=$(gh release list --limit 1000 | awk -F '\t' '{print $3}' | tail -n +11)
+          
+          if [ -z "$tags_to_delete" ]; then
+            echo "No old releases to delete."
+            exit 0
+          fi
+          
+          for tag in $tags_to_delete; do
+            echo "Deleting release and tag: $tag"
+            gh release delete "$tag" --cleanup-tag -y || true
+          done
+
       - name: Push files to release branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # 仅保留需要的文件
+          # 保存需要的文件到临时目录
+          mkdir -p /tmp/release_files
+          cp geoip.dat geosite.dat geoip.dat.sha256sum geosite.dat.sha256sum /tmp/release_files/
+
+          # 创建无历史记录的孤立分支（orphan branch）
+          git checkout --orphan tmp_release
+
+          # 清空工作区
+          git rm -rf .
+
+          # 将需要的文件复制回来
+          cp /tmp/release_files/* .
+
+          # 提交并强制推送，release 分支将只保留这一条提交
           git add geoip.dat geosite.dat geoip.dat.sha256sum geosite.dat.sha256sum
-
-          # 检查是否有变更
-          if git diff --cached --quiet; then
-            echo "No changes detected on release branch, skipping commit."
-          else
-            git commit -m "Update geodata: ${RELEASE_TAG}"
-            git push origin HEAD:${RELEASE_BRANCH}
-            echo "✅ Pushed to ${RELEASE_BRANCH} branch."
-          fi
-
-      - name: Delete workflow runs
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 10
-
-      - name: Delete old releases
-        uses: dev-drprasad/delete-older-releases@v0.3.4
-        with:
-          keep_latest: 10
-          delete_expired_data: 0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git commit -m "Update geodata: ${RELEASE_TAG}"
+          git push --force origin tmp_release:${RELEASE_BRANCH}
+          echo "✅ Force-pushed to ${RELEASE_BRANCH} branch (single commit, no history)."
