@@ -149,21 +149,25 @@ jobs:
           echo "Release tag: ${TAG}"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: ${{ env.RELEASE_TAG }}
-          body: |
-            ## GeoData Update — ${{ env.RELEASE_TAG }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_BODY=$(cat <<'EOF'
+          ## GeoData Update — ${{ env.RELEASE_TAG }}
 
-            | 文件 | 上游仓库 | 上游 Tag |
-            |------|---------|---------|
-            | `geoip.dat` | [${{ env.GEOIP_REPO }}](https://github.com/${{ env.GEOIP_REPO }}) | `${{ env.GEOIP_TAG }}` |
-            | `geosite.dat` | [${{ env.GEOSITE_REPO }}](https://github.com/${{ env.GEOSITE_REPO }}) | `${{ env.GEOSITE_TAG }}` |
-          files: |
-            geoip.dat
-            geosite.dat
-            geoip.dat.sha256sum
+          | 文件 | 上游仓库 | 上游 Tag |
+          |------|---------|---------|
+          | `geoip.dat` | [${{ env.GEOIP_REPO }}](https://github.com/${{ env.GEOIP_REPO }}) | `${{ env.GEOIP_TAG }}` |
+          | `geosite.dat` | [${{ env.GEOSITE_REPO }}](https://github.com/${{ env.GEOSITE_REPO }}) | `${{ env.GEOSITE_TAG }}` |
+          EOF
+          )
+
+          gh release create "${RELEASE_TAG}" \
+            --title "${RELEASE_TAG}" \
+            --notes "${RELEASE_BODY}" \
+            geoip.dat \
+            geosite.dat \
+            geoip.dat.sha256sum \
             geosite.dat.sha256sum
 
       - name: Delete old releases
