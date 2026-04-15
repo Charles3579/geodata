@@ -17,18 +17,12 @@ jobs:
   sync-geodata:
     runs-on: ubuntu-latest
     steps:
-      # ──────────────────────────────────────────────
-      #  1. Checkout 仓库
-      # ──────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@main
         with:
           ref: ${{ env.RELEASE_BRANCH }}
           fetch-depth: 1
 
-      # ──────────────────────────────────────────────
-      #  2. 下载 geoip.dat 及其 sha256sum
-      # ──────────────────────────────────────────────
       - name: Download geoip.dat from upstream
         run: |
           echo "::group::Fetching latest release info from $GEOIP_REPO"
@@ -48,9 +42,6 @@ jobs:
 
           echo "GEOIP_TAG=${GEOIP_TAG}" >> "$GITHUB_ENV"
 
-      # ──────────────────────────────────────────────
-      #  3. 下载 geosite.dat 及其 sha256sum
-      # ──────────────────────────────────────────────
       - name: Download geosite.dat from upstream
         run: |
           echo "::group::Fetching latest release info from $GEOSITE_REPO"
@@ -70,9 +61,6 @@ jobs:
 
           echo "GEOSITE_TAG=${GEOSITE_TAG}" >> "$GITHUB_ENV"
 
-      # ──────────────────────────────────────────────
-      #  4. 校验 SHA256 哈希
-      # ──────────────────────────────────────────────
       - name: Verify SHA256 checksums
         run: |
           echo "=== Verifying geoip.dat ==="
@@ -101,9 +89,6 @@ jobs:
           fi
           echo "  ✅ geosite.dat checksum OK"
 
-      # ──────────────────────────────────────────────
-      #  5. 使用 Xray 校验 geosite/geoip 资源有效性
-      # ──────────────────────────────────────────────
       - name: Verify geodata with Xray
         id: xray_verify
         run: |
@@ -157,18 +142,12 @@ jobs:
           echo "::error::Geodata verification failed, aborting release."
           exit 1
 
-      # ──────────────────────────────────────────────
-      #  6. 生成 Tag（年月日时分 格式）
-      # ──────────────────────────────────────────────
       - name: Generate release tag
         run: |
           TAG=$(date -u +'%Y%m%d%H%M')
           echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
           echo "Release tag: ${TAG}"
 
-      # ──────────────────────────────────────────────
-      #  7. 发布到 Release
-      # ──────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -187,9 +166,6 @@ jobs:
             geoip.dat.sha256sum
             geosite.dat.sha256sum
 
-      # ──────────────────────────────────────────────
-      #  8. 推送到 release 分支
-      # ──────────────────────────────────────────────
       - name: Push files to release branch
         run: |
           git config user.name "github-actions[bot]"
