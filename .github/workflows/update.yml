@@ -182,3 +182,19 @@ jobs:
             git push origin HEAD:${RELEASE_BRANCH}
             echo "✅ Pushed to ${RELEASE_BRANCH} branch."
           fi
+
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 10
+
+      - name: Delete old releases
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        with:
+          keep_latest: 10
+          delete_expired_data: 0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
